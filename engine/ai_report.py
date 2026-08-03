@@ -8,13 +8,17 @@ except ImportError:  # pragma: no cover - defensive for environments without the
 
 
 def get_client():
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("OPENAI_APIKEY")
+        or os.getenv("OPENAI_KEY")
+    )
     if not api_key or OpenAI is None:
         return None
     try:
         return OpenAI(api_key=api_key)
-    except Exception:
-        return None
+    except Exception as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def generate_ai_report(analysis: dict, health_data: dict) -> dict:
@@ -67,7 +71,11 @@ Respond ONLY with valid JSON in this exact format:
   "confidence": "High|Medium|Low"
 }}"""
 
-    client = get_client()
+    try:
+        client = get_client()
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
     if client is None:
         return {"status": "error", "message": "OpenAI API key is not configured"}
 
