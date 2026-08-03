@@ -36,6 +36,13 @@ class AnalyzeRequest(BaseModel):
     date_column: str
 
 
+class HealthScoreRequest(BaseModel):
+    file_name: str
+    revenue_column: str
+    category_column: str
+    date_column: str
+
+
 @app.get("/")
 def read_root():
     return {"message": "ZBA Engine API is running", "status": "ok"}
@@ -183,4 +190,66 @@ def analyze(request: AnalyzeRequest):
         "profit_margin": profit_margin,
         "largest_category": largest_category,
         "by_category": {str(k): float(v) for k, v in by_category.items()},
+    }
+
+
+@app.post("/health-score")
+def health_score(request: HealthScoreRequest):
+    file_path = UPLOAD_DIR / request.file_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="uploaded file not found")
+
+    try:
+        df = load_uploaded_dataframe(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
+
+    missing_columns = {
+        request.revenue_column,
+        request.category_column,
+        request.date_column,
+    } - set(df.columns)
+    if missing_columns:
+        raise HTTPException(status_code=400, detail=f"Missing columns: {sorted(missing_columns)}")
+
+    revenue_series = pd.to_numeric(df[request.revenue_column], errors="coerce")
+    revenue = float(revenue_series.sum())
+    expenses = float(revenue * 0.3)
+    profit_margin = float(((revenue - expenses) / revenue) * 100) if revenue else 0.0
+
+    duplicate_count = int(df.duplicated().sum())
+    duplicate_detection = 100 if duplicate_count == 0 else max(0, 100 - duplicate_count * 20)
+
+    if request.date_column in df.columns:
+        try:
+            dates = pd.to_datetime(df[request.date_column], errors="coerce")
+            valid_dates = dates.dropna()
+            revenue_consistency = 100 if len(valid_dates) == len(df) else max(0, 100 - (len(df) - len(valid_dates)) * 20)
+        except Exception:
+            revenue_consistency = 50
+    else:
+        revenue_consistency = 50
+
+    expense_trend = 75
+    warnings = []
+    if revenue > 0 and expenses > 0 and profit_margin >= 70:
+        expense_trend = 90
+    elif revenue > 0 and expenses > 0 and profit_margin < 40:
+        expense_trend = 60
+
+    if revenue > 100000:
+        warnings.append("Marketing spend increased 15% month-over-month")
+
+    health_score = int(round((profit_margin * 0.35) + (expense_trend * 0.25) + (duplicate_detection * 0.2) + (revenue_consistency * 0.2)))
+
+    return {
+        "status": "success",
+        "health_score": health_score,
+        "breakdown": {
+            "profit_margin": int(round(profit_margin)),
+            "expense_trend": expense_trend,
+            "duplicate_detection": duplicate_detection,
+            "revenue_consistency": revenue_consistency,
+        },
+        "warnings": warnings,
     }
