@@ -43,9 +43,9 @@ def test_analyze_returns_summary_for_uploaded_csv(tmp_path):
 
 def test_ai_report_returns_error_when_api_key_missing(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    import app as app_module
+    import engine.ai_report as ai_report_module
 
-    app_module.client = None
+    ai_report_module.get_client = lambda: None
 
     response = client.post(
         "/ai-report",
