@@ -18,7 +18,14 @@ REPO_ROOT = Path(__file__).resolve().parent
 
 def resolve_input_file(file_name: str) -> Path:
     safe_name = Path(file_name).name
-    candidates = [UPLOAD_DIR / safe_name, REPO_ROOT / safe_name]
+    candidates = [
+        UPLOAD_DIR / safe_name,
+        REPO_ROOT / safe_name,
+        Path.cwd() / safe_name,
+        Path("/app") / safe_name,
+        Path("/workspace") / safe_name,
+        Path("/workspaces/zba-engine") / safe_name,
+    ]
     for candidate in candidates:
         if candidate.exists():
             return candidate
