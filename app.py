@@ -13,6 +13,16 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def resolve_input_file(file_name: str) -> Path:
+    safe_name = Path(file_name).name
+    candidates = [UPLOAD_DIR / safe_name, REPO_ROOT / safe_name]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise HTTPException(status_code=404, detail="uploaded file not found")
 
 
 def load_uploaded_dataframe(file_path: Path) -> pd.DataFrame:
@@ -151,9 +161,7 @@ async def upload(file: UploadFile = File(...)):
 
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest):
-    file_path = UPLOAD_DIR / request.file_name
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="uploaded file not found")
+    file_path = resolve_input_file(request.file_name)
 
     try:
         df = load_uploaded_dataframe(file_path)
@@ -195,9 +203,7 @@ def analyze(request: AnalyzeRequest):
 
 @app.post("/health-score")
 def health_score(request: HealthScoreRequest):
-    file_path = UPLOAD_DIR / request.file_name
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="uploaded file not found")
+    file_path = resolve_input_file(request.file_name)
 
     try:
         df = load_uploaded_dataframe(file_path)
