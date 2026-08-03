@@ -1,12 +1,15 @@
 import json
 import os
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - defensive for environments without the package
+    OpenAI = None
 
 
 def get_client():
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if not api_key or OpenAI is None:
         return None
     try:
         return OpenAI(api_key=api_key)
