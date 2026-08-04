@@ -83,10 +83,23 @@ def health_check():
 
 @app.get("/env")
 def debug_env():
-    """Debug endpoint to check environment variables."""
+    """Debug endpoint to check environment variables and runtime package availability."""
+    openai_available = False
+    openai_version = None
+    try:
+        import importlib.util
+        if importlib.util.find_spec("openai") is not None:
+            openai_available = True
+            import openai
+            openai_version = getattr(openai, "__version__", None)
+    except Exception:
+        openai_available = False
+
     return {
         "OPENAI_API_KEY_present": bool(os.getenv("OPENAI_API_KEY")),
         "OPENAI_API_KEY_length": len(os.getenv("OPENAI_API_KEY") or ""),
+        "openai_package_available": openai_available,
+        "openai_package_version": openai_version,
     }
 
 
