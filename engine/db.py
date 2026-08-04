@@ -8,7 +8,13 @@ from sqlalchemy import create_engine
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/zba")
 
-engine: Engine = create_engine(DATABASE_URL, echo=False)
+from sqlalchemy.engine.url import make_url
+
+url = make_url(DATABASE_URL)
+if url.drivername in {"postgresql", "postgres"}:
+    url = url.set(drivername="postgresql+psycopg")
+
+engine: Engine = create_engine(url, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
