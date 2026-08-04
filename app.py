@@ -9,6 +9,7 @@ import io
 import csv
 
 from engine.ai_report import generate_ai_report
+from engine.db import AnalysisResult, Report, SessionLocal, Upload, init_db
 
 app = FastAPI(title="ZBA Engine", version="0.1.0")
 
@@ -18,6 +19,11 @@ ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 REPO_ROOT = Path(__file__).resolve().parent
+
+try:
+    init_db()
+except Exception:
+    pass
 
 
 def resolve_input_file(file_name: str) -> Path:
@@ -184,19 +190,32 @@ async def upload(file: UploadFile = File(...)):
         if df.empty:
             raise HTTPException(status_code=400, detail="File is empty or has no data.")
 
-        return {
-            "status": "success",
-            "file_name": file.filename,
-            "file_type": file_ext.lstrip("."),
-            "rows": len(df),
-            "columns": len(df.columns),
-            "column_names": df.columns.tolist()
-        }
-
     except pd.errors.ParserError as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+    # Persist upload metadata
+    try:
+        with SessionLocal() as db:
+            upload_entry = Upload(
+                file_name=file.filename,
+                file_size=len(contents),
+            )
+            db.add(upload_entry)
+            db.commit()
+            db.refresh(upload_entry)
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "file_name": file.filename,
+        "file_type": file_ext.lstrip("."),
+        "rows": len(df),
+        "columns": len(df.columns),
+        "column_names": df.columns.tolist()
+    }
 
 
 @app.post("/analyze")
@@ -322,11 +341,34 @@ async def ai_report(request: AnalysisRequest):
                 "details": ai_result,
             }
 
+        ai_report_payload = ai_result.get("ai_report")
+        try:
+            with SessionLocal() as db:
+                analysis_record = AnalysisResult(
+                    revenue=analysis_result.get("revenue"),
+                    expenses=analysis_result.get("expenses"),
+                    net_profit=analysis_result.get("net_profit"),
+                    profit_margin=analysis_result.get("profit_margin"),
+                )
+                db.add(analysis_record)
+                db.commit()
+                db.refresh(analysis_record)
+
+                report_record = Report(
+                    analysis_id=analysis_record.id,
+                    health_score=health_result.get("health_score"),
+                    ai_narrative=json.dumps(ai_report_payload),
+                )
+                db.add(report_record)
+                db.commit()
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "financials": analysis_result,
             "health": health_result,
-            "ai_report": ai_result.get("ai_report"),
+            "ai_report": ai_report_payload,
         }
 
     except Exception as e:
