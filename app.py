@@ -373,3 +373,48 @@ async def ai_report(request: AnalysisRequest):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/uploads")
+def list_uploads():
+    """Return a list of uploaded file metadata stored in the database."""
+    try:
+        with SessionLocal() as db:
+            uploads = db.query(Upload).order_by(Upload.uploaded_at.desc()).all()
+            return {
+                "status": "success",
+                "uploads": [
+                    {
+                        "id": upload.id,
+                        "file_name": upload.file_name,
+                        "file_size": upload.file_size,
+                        "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                    }
+                    for upload in uploads
+                ],
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to query uploads: {str(e)}")
+
+
+@app.get("/reports")
+def list_reports():
+    """Return a list of persisted AI report entries from the database."""
+    try:
+        with SessionLocal() as db:
+            reports = db.query(Report).order_by(Report.generated_at.desc()).all()
+            return {
+                "status": "success",
+                "reports": [
+                    {
+                        "id": report.id,
+                        "analysis_id": report.analysis_id,
+                        "health_score": report.health_score,
+                        "ai_narrative": json.loads(report.ai_narrative) if report.ai_narrative else None,
+                        "generated_at": report.generated_at.isoformat() if report.generated_at else None,
+                    }
+                    for report in reports
+                ],
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to query reports: {str(e)}")
