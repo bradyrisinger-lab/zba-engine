@@ -81,6 +81,15 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.get("/env")
+def debug_env():
+    """Debug endpoint to check environment variables."""
+    return {
+        "OPENAI_API_KEY_present": bool(os.getenv("OPENAI_API_KEY")),
+        "OPENAI_API_KEY_length": len(os.getenv("OPENAI_API_KEY") or ""),
+    }
+
+
 @app.post("/calculate")
 def calculate(request: CalculationRequest):
     if not request.values:
