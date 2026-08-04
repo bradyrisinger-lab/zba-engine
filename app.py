@@ -9,7 +9,8 @@ import io
 import csv
 
 from engine.ai_report import generate_ai_report
-from engine.db import AnalysisResult, Report, SessionLocal, Upload, init_db
+from engine.db import AnalysisResult, Insight, Report, SessionLocal, Upload, init_db
+from engine.insight_engine import generate_insights
 
 app = FastAPI(title="ZBA Engine", version="0.1.0")
 
@@ -361,6 +362,26 @@ async def ai_report(request: AnalysisRequest):
                 )
                 db.add(report_record)
                 db.commit()
+
+                financial_context = {
+                    "analysis": analysis_result,
+                    "health": health_result,
+                    "ai_report": ai_report_payload,
+                }
+                insights = generate_insights(financial_context)
+                for item in insights[:30]:
+                    insight_record = Insight(
+                        severity=item.get("severity", "Medium"),
+                        category=item.get("category", "Finance"),
+                        title=item.get("title", "Insight"),
+                        description=item.get("description", ""),
+                        impact=item.get("impact", ""),
+                        estimated_savings=float(item.get("estimated_savings", 0) or 0),
+                        actionable=bool(item.get("actionable", True)),
+                        resolved=bool(item.get("resolved", False)),
+                    )
+                    db.add(insight_record)
+                db.commit()
         except Exception:
             pass
 
@@ -418,3 +439,96 @@ def list_reports():
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to query reports: {str(e)}")
+
+
+@app.get("/insights")
+def list_insights():
+    """Return all persisted insights."""
+    try:
+        with SessionLocal() as db:
+            insights = db.query(Insight).order_by(Insight.created_at.desc()).all()
+            return {
+                "status": "success",
+                "insights": [
+                    {
+                        "id": insight.id,
+                        "severity": insight.severity,
+                        "category": insight.category,
+                        "title": insight.title,
+                        "description": insight.description,
+                        "impact": insight.impact,
+                        "estimated_savings": insight.estimated_savings,
+                        "actionable": insight.actionable,
+                        "resolved": insight.resolved,
+                        "created_at": insight.created_at.isoformat() if insight.created_at else None,
+                    }
+                    for insight in insights
+                ],
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to query insights: {str(e)}")
+
+
+@app.get("/insights/{insight_id}")
+def get_insight(insight_id: int):
+    """Return a single insight by id."""
+    try:
+        with SessionLocal() as db:
+            insight = db.query(Insight).filter(Insight.id == insight_id).first()
+            if not insight:
+                raise HTTPException(status_code=404, detail="insight not found")
+            return {
+                "status": "success",
+                "insight": {
+                    "id": insight.id,
+                    "severity": insight.severity,
+                    "category": insight.category,
+                    "title": insight.title,
+                    "description": insight.description,
+                    "impact": insight.impact,
+                    "estimated_savings": insight.estimated_savings,
+                    "actionable": insight.actionable,
+                    "resolved": insight.resolved,
+                    "created_at": insight.created_at.isoformat() if insight.created_at else None,
+                },
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to query insight: {str(e)}")
+
+
+class InsightResolutionRequest(BaseModel):
+    resolved: bool
+
+
+@app.patch("/insights/{insight_id}")
+def update_insight(insight_id: int, request: InsightResolutionRequest):
+    """Mark an insight as resolved or unresolved."""
+    try:
+        with SessionLocal() as db:
+            insight = db.query(Insight).filter(Insight.id == insight_id).first()
+            if not insight:
+                raise HTTPException(status_code=404, detail="insight not found")
+            insight.resolved = request.resolved
+            db.commit()
+            db.refresh(insight)
+            return {
+                "status": "success",
+                "insight": {
+                    "id": insight.id,
+                    "severity": insight.severity,
+                    "category": insight.category,
+                    "title": insight.title,
+                    "description": insight.description,
+                    "impact": insight.impact,
+                    "estimated_savings": insight.estimated_savings,
+                    "actionable": insight.actionable,
+                    "resolved": insight.resolved,
+                    "created_at": insight.created_at.isoformat() if insight.created_at else None,
+                },
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update insight: {str(e)}")

@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import create_engine
@@ -54,6 +54,20 @@ class Report(Base):
     health_score = Column(Integer)
     ai_narrative = Column(Text)
     generated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Insight(Base):
+    __tablename__ = "insights"
+    id = Column(Integer, primary_key=True, index=True)
+    severity = Column(String)
+    category = Column(String)
+    title = Column(String)
+    description = Column(Text)
+    impact = Column(Text)
+    estimated_savings = Column(Float)
+    actionable = Column(Boolean, default=True)
+    resolved = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db() -> None:
